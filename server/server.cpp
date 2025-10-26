@@ -120,12 +120,6 @@ void Server::handleClient(int clientSocket) {
     ssize_t bytesRead;
     bool authenticated = false;
     
-    // Установим таймаут для чтения
-    struct timeval tv;
-    tv.tv_sec = 30;
-    tv.tv_usec = 0;
-    setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-    
     // Фаза аутентификации
     bytesRead = read(clientSocket, buffer, sizeof(buffer) - 1);
     if (bytesRead > 0) {
@@ -153,8 +147,7 @@ void Server::handleClient(int clientSocket) {
             uint32_t numVectors = readUint32(clientSocket);
             std::cout << "Количество векторов: " << numVectors << std::endl;
             
-            // Отправляем подтверждение
-            sendUint32(clientSocket, 1);
+            // НЕ отправляем подтверждение - клиент его не ожидает
             
             // Обрабатываем каждый вектор
             for (uint32_t i = 0; i < numVectors; i++) {
@@ -162,8 +155,7 @@ void Server::handleClient(int clientSocket) {
                 uint32_t vectorSize = readUint32(clientSocket);
                 std::cout << "Размер вектора " << i << ": " << vectorSize << std::endl;
                 
-                // Отправляем подтверждение
-                sendUint32(clientSocket, 1);
+                // НЕ отправляем подтверждение - клиент его не ожидает
                 
                 // Читаем данные вектора
                 std::vector<uint64_t> vectorData;
@@ -179,10 +171,12 @@ void Server::handleClient(int clientSocket) {
                 if (vectorData.size() > 5) std::cout << "...";
                 std::cout << std::endl;
                 
-                // Обрабатываем вектор и отправляем результат
+                // Вычисляем сумму квадратов
                 uint64_t result = processVector(vectorData);
                 
                 std::cout << "Отправляем результат " << result << " для вектора " << i << std::endl;
+                
+                // Отправляем результат клиенту
                 sendUint64(clientSocket, result);
             }
             
@@ -197,34 +191,32 @@ void Server::handleClient(int clientSocket) {
 
 uint32_t Server::readUint32(int clientSocket) {
     uint32_t value;
-    ssize_t bytesRead = read(clientSocket, &value, sizeof(value));
+    ssize_t bytesRead = recv(clientSocket, &value, sizeof(value), MSG_WAITALL);
     if (bytesRead != sizeof(value)) {
         throw std::runtime_error("Не удалось прочитать uint32");
     }
-    // Конвертируем из little-endian в host order
-    return le32toh(value);
+    // БЕЗ ПРЕОБРАЗОВАНИЙ - используем как есть
+    return value;
 }
 
 uint64_t Server::readUint64(int clientSocket) {
     uint64_t value;
-    ssize_t bytesRead = read(clientSocket, &value, sizeof(value));
+    ssize_t bytesRead = recv(clientSocket, &value, sizeof(value), MSG_WAITALL);
     if (bytesRead != sizeof(value)) {
         throw std::runtime_error("Не удалось прочитать uint64");
     }
-    // Конвертируем из little-endian в host order
-    return le64toh(value);
+    // БЕЗ ПРЕОБРАЗОВАНИЙ - используем как есть
+    return value;
 }
 
 void Server::sendUint32(int clientSocket, uint32_t value) {
-    // Конвертируем в little-endian
-    uint32_t netValue = htole32(value);
-    send(clientSocket, &netValue, sizeof(netValue), 0);
+    // БЕЗ ПРЕОБРАЗОВАНИЙ - отправляем как есть
+    send(clientSocket, &value, sizeof(value), 0);
 }
 
 void Server::sendUint64(int clientSocket, uint64_t value) {
-    // Конвертируем в little-endian
-    uint64_t netValue = htole64(value);
-    send(clientSocket, &netValue, sizeof(netValue), 0);
+    // БЕЗ ПРЕОБРАЗОВАНИЙ - отправляем как есть
+    send(clientSocket, &value, sizeof(value), 0);
 }
 
 std::string Server::processAuthentication(const std::string& request) {

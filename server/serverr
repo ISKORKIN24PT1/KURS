@@ -1,0 +1,1103 @@
+logger.h
+///
+#ifndef LOGGER_H
+#define LOGGER_H
+
+#include <string>
+#include <fstream>
+#include <mutex>
+
+class Logger {
+private:
+    std::ofstream logFile;
+    std::mutex logMutex;
+    std::string logFileName;
+
+public:
+    Logger(const std::string& filename);
+    ~Logger();
+    
+    void log(const std::string& message, const std::string& level = "INFO");
+    void logError(const std::string& errorMessage);
+    void logInfo(const std::string& infoMessage);
+};
+
+#endif
+///
+logger.cpp
+///
+#include "logger.h"
+#include <iostream>
+#include <chrono>
+#include <iomanip>
+
+Logger::Logger(const std::string& filename) : logFileName(filename) {
+    logFile.open(filename, std::ios::app);
+    if (!logFile.is_open()) {
+        std::cerr << "ERROR: Cannot open log file: " << filename << std::endl;
+    }
+}
+
+Logger::~Logger() {
+    if (logFile.is_open()) {
+        logFile.close();
+    }
+}
+
+void Logger::log(const std::string& message, const std::string& level) {
+    std::lock_guard<std::mutex> lock(logMutex);
+    
+    auto now = std::chrono::system_clock::now();
+    auto time_t = std::chrono::system_clock::to_time_t(now);
+    
+    std::cout << "[" << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S") 
+              << "] [" << level << "] " << message << std::endl;
+    
+    if (logFile.is_open()) {
+        logFile << "[" << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S") 
+                << "] [" << level << "] " << message << std::endl;
+        logFile.flush();
+    }
+}
+
+void Logger::logError(const std::string& errorMessage) {
+    log(errorMessage, "ERROR");
+}
+
+void Logger::logInfo(const std::string& infoMessage) {
+    log(infoMessage, "INFO");
+}
+///
+authenticator.h
+///
+#ifndef AUTHENTICATOR_H
+#define AUTHENTICATOR_H
+
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+class Authenticator {
+private:
+    std::unordered_map<std::string, std::string> users; // login -> password
+    
+public:
+    bool loadUsersFromFile(const std::string& filename);
+    bool authenticate(const std::string& login, const std::string& salt, const std::string& clientHash);
+    std::string computeHash(const std::string& salt, const std::string& password);
+};
+
+#endif
+///
+authenticator.cpp
+///
+#include "authenticator.h"
+#include <fstream>
+#include <sstream>
+#include <openssl/sha.h>
+#include <iomanip>
+#include <iostream>
+
+bool Authenticator::loadUsersFromFile(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "ERROR: Cannot open users file: " << filename << std::endl;
+        return false;
+    }
+    
+    std::string line;
+    int count = 0;
+    while (std::getline(file, line)) {
+        size_t pos = line.find(':');
+        if (pos != std::string::npos) {
+            std::string login = line.substr(0, pos);
+            std::string password = line.substr(pos + 1);
+            users[login] = password;
+            count++;
+            std::cout << "DEBUG: Loaded user: " << login << std::endl;
+        }
+    }
+    
+    file.close();
+    std::cout << "DEBUG: Total users loaded: " << count << std::endl;
+    return true;
+}
+
+std::string Authenticator::computeHash(const std::string& salt, const std::string& password) {
+    std::string data = salt + password;
+    
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256_CTX sha256;
+    SHA256_Init(&sha256);
+    SHA256_Update(&sha256, data.c_str(), data.size());
+    SHA256_Final(hash, &sha256);
+    
+    std::stringstream ss;
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+    }
+    
+    return ss.str();
+}
+
+bool Authenticator::authenticate(const std::string& login, const std::string& salt, 
+                                const std::string& clientHash) {
+    // Отладочный вывод
+    std::cout << "=== DEBUG AUTHENTICATION ===" << std::endl;
+    std::cout << "DEBUG AUTH: Login='" << login << "'" << std::endl;
+    std::cout << "DEBUG AUTH: Salt='" << salt << "'" << std::endl;
+    std::cout << "DEBUG AUTH: ClientHash='" << clientHash << "'" << std::endl;
+    std::cout << "DEBUG AUTH: ClientHash length=" << clientHash.length() << std::endl;
+    
+    auto it = users.find(login);
+    if (it == users.end()) {
+        std::cout << "DEBUG AUTH: User '" << login << "' not found in database" << std::endl;
+        std::cout << "DEBUG AUTH: Available users: ";
+        for (const auto& user : users) {
+            std::cout << user.first << " ";
+        }
+        std::cout << std::endl;
+        return false;
+    }
+    
+    std::cout << "DEBUG AUTH: User '" << login << "' found, password='" << it->second << "'" << std::endl;
+    
+    std::string serverHash = computeHash(salt, it->second);
+    std::cout << "DEBUG AUTH: ServerHash='" << serverHash << "'" << std::endl;
+    std::cout << "DEBUG AUTH: ServerHash length=" << serverHash.length() << std::endl;
+    
+    bool match = (serverHash == clientHash);
+    std::cout << "DEBUG AUTH: Match=" << (match ? "YES" : "NO") << std::endl;
+    std::cout << "=== END DEBUG AUTHENTICATION ===" << std::endl;
+    
+    return match;
+}
+///
+calculator.h
+///
+#ifndef CALCULATOR_H
+#define CALCULATOR_H
+
+#include <vector>
+#include <cstdint>
+
+class Calculator {
+public:
+    uint64_t computeSumOfSquares(const std::vector<uint64_t>& vector);
+};
+
+#endif
+///
+calculator.cpp
+///
+#include "calculator.h"
+#include <limits>
+
+uint64_t Calculator::computeSumOfSquares(const std::vector<uint64_t>& vector) {
+    uint64_t sum = 0;
+    
+    for (uint64_t value : vector) {
+        // Проверка на переполнение
+        if (value > 0 && sum > std::numeric_limits<uint64_t>::max() / value) {
+            // Переполнение вверх - возвращаем 1
+            return 1;
+        }
+        
+        uint64_t square = value * value;
+        
+        // Проверка на переполнение при сложении
+        if (sum > std::numeric_limits<uint64_t>::max() - square) {
+            // Переполнение вверх - возвращаем 1
+            return 1;
+        }
+        
+        sum += square;
+    }
+    
+    return sum;
+}
+#include "calculator.h"
+#include <limits>
+
+uint64_t Calculator::computeSumOfSquares(const std::vector<uint64_t>& vector) {
+    uint64_t sum = 0;
+    
+    for (uint64_t value : vector) {
+        // Проверка на переполнение
+        if (value > 0 && sum > std::numeric_limits<uint64_t>::max() / value) {
+            // Переполнение вверх - возвращаем 1
+            return 1;
+        }
+        
+        uint64_t square = value * value;
+        
+        // Проверка на переполнение при сложении
+        if (sum > std::numeric_limits<uint64_t>::max() - square) {
+            // Переполнение вверх - возвращаем 1
+            return 1;
+        }
+        
+        sum += square;
+    }
+    
+    return sum;
+}
+///
+network_helper.h
+///
+#ifndef NETWORK_HELPER_H
+#define NETWORK_HELPER_H
+
+#include <string>
+#include <vector>
+#include <cstdint>
+
+class NetworkHelper {
+private:
+    int serverSocketfd;
+    int clientSocketfd;
+    
+public:
+    NetworkHelper();
+    ~NetworkHelper();
+    
+    // Серверные методы
+    bool createSocket();
+    bool bindSocket(int port);
+    bool startListening();
+    int acceptConnection();
+    bool closeServer();
+    
+    // Клиентские методы
+    bool setClientSocket(int socket);
+    bool closeClient();
+    
+    // Базовые функции отправки/приема
+    bool sendData(const void* data, size_t size);
+    bool receiveData(void* buffer, size_t size);
+    
+    // Специализированные функции для протокола
+    bool sendString(const std::string& str);
+    std::string receiveString(size_t maxLength = 1024);
+    
+    bool sendUint32(uint32_t value);
+    bool receiveUint32(uint32_t& value);
+    
+    bool sendUint64(uint64_t value);
+    bool receiveUint64(uint64_t& value);
+    
+    bool sendVector(const std::vector<uint64_t>& vector);
+    bool receiveVector(std::vector<uint64_t>& vector, uint32_t size);
+};
+
+#endif
+///
+network_helper.cpp
+///
+#include "network_helper.h"
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <cstring>
+
+NetworkHelper::NetworkHelper() : serverSocketfd(-1), clientSocketfd(-1) {}
+
+NetworkHelper::~NetworkHelper() {
+    closeClient();
+    closeServer();
+}
+
+bool NetworkHelper::createSocket() {
+    serverSocketfd = socket(AF_INET, SOCK_STREAM, 0);
+    return serverSocketfd != -1;
+}
+
+bool NetworkHelper::bindSocket(int port) {
+    struct sockaddr_in serverAddr;
+    memset(&serverAddr, 0, sizeof(serverAddr));
+    
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(port);
+    
+    return bind(serverSocketfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == 0;
+}
+
+bool NetworkHelper::startListening() {
+    return listen(serverSocketfd, 5) == 0; // backlog = 5
+}
+
+int NetworkHelper::acceptConnection() {
+    struct sockaddr_in clientAddr;
+    socklen_t clientLen = sizeof(clientAddr);
+    
+    return accept(serverSocketfd, (struct sockaddr*)&clientAddr, &clientLen);
+}
+
+bool NetworkHelper::closeServer() {
+    if (serverSocketfd != -1) {
+        close(serverSocketfd);
+        serverSocketfd = -1;
+        return true;
+    }
+    return false;
+}
+
+bool NetworkHelper::setClientSocket(int socket) {
+    clientSocketfd = socket;
+    return true;
+}
+
+bool NetworkHelper::closeClient() {
+    if (clientSocketfd != -1) {
+        close(clientSocketfd);
+        clientSocketfd = -1;
+        return true;
+    }
+    return false;
+}
+
+bool NetworkHelper::sendData(const void* data, size_t size) {
+    if (clientSocketfd == -1) return false;
+    return send(clientSocketfd, data, size, 0) == static_cast<ssize_t>(size);
+}
+
+bool NetworkHelper::receiveData(void* buffer, size_t size) {
+    if (clientSocketfd == -1) return false;
+    return recv(clientSocketfd, buffer, size, 0) == static_cast<ssize_t>(size);
+}
+
+bool NetworkHelper::sendString(const std::string& str) {
+    return sendData(str.c_str(), str.length());
+}
+
+std::string NetworkHelper::receiveString(size_t maxLength) {
+    if (clientSocketfd == -1) return "";
+    
+    std::vector<char> buffer(maxLength);
+    ssize_t received = recv(clientSocketfd, buffer.data(), maxLength, 0);
+    
+    if (received > 0) {
+        return std::string(buffer.data(), received);
+    }
+    return "";
+}
+
+bool NetworkHelper::sendUint32(uint32_t value) {
+    uint32_t networkValue = htonl(value);
+    return sendData(&networkValue, sizeof(networkValue));
+}
+
+bool NetworkHelper::receiveUint32(uint32_t& value) {
+    uint32_t networkValue;
+    if (receiveData(&networkValue, sizeof(networkValue))) {
+        value = ntohl(networkValue);
+        return true;
+    }
+    return false;
+}
+
+bool NetworkHelper::sendUint64(uint64_t value) {
+    // Простая реализация для little-endian систем
+    uint64_t networkValue = value;
+    return sendData(&networkValue, sizeof(networkValue));
+}
+
+bool NetworkHelper::receiveUint64(uint64_t& value) {
+    uint64_t networkValue;
+    if (receiveData(&networkValue, sizeof(networkValue))) {
+        value = networkValue;
+        return true;
+    }
+    return false;
+}
+
+bool NetworkHelper::sendVector(const std::vector<uint64_t>& vector) {
+    for (uint64_t value : vector) {
+        if (!sendUint64(value)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool NetworkHelper::receiveVector(std::vector<uint64_t>& vector, uint32_t size) {
+    vector.resize(size);
+    for (uint32_t i = 0; i < size; i++) {
+        if (!receiveUint64(vector[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+///
+client_handler.h
+///
+#ifndef CLIENT_HANDLER_H
+#define CLIENT_HANDLER_H
+
+#include "network_helper.h"
+#include "authenticator.h"
+#include "calculator.h"
+#include "logger.h"
+#include <memory>
+
+class ClientHandler {
+private:
+    // Изменяем порядок объявления чтобы соответствовать конструктору
+    int clientSocket;
+    Authenticator& authenticator;
+    Calculator& calculator;
+    Logger& logger;
+    std::unique_ptr<NetworkHelper> network;
+    
+public:
+    ClientHandler(int socket, Authenticator& auth, Calculator& calc, Logger& log);
+    void handleClient();
+    
+private:
+    bool authenticateClient();
+    bool processVectors();
+    void sendErrorAndClose(const std::string& error);
+};
+
+#endif
+///
+client_handler.cpp
+///
+#include "client_handler.h"
+#include <sstream>
+#include <unistd.h>
+#include <iostream>
+
+ClientHandler::ClientHandler(int socket, Authenticator& auth, Calculator& calc, Logger& log)
+    : clientSocket(socket), authenticator(auth), calculator(calc), logger(log) {
+    network = std::make_unique<NetworkHelper>();
+    network->setClientSocket(clientSocket);
+}
+
+void ClientHandler::handleClient() {
+    logger.logInfo("New client connected, socket: " + std::to_string(clientSocket));
+    
+    // Аутентификация
+    if (!authenticateClient()) {
+        logger.logError("Client authentication failed");
+        network->closeClient();
+        return;
+    }
+    
+    logger.logInfo("Client authenticated successfully");
+    
+    // Обработка векторов
+    if (!processVectors()) {
+        logger.logError("Error processing vectors");
+        network->closeClient();
+        return;
+    }
+    
+    logger.logInfo("Client processing completed successfully");
+    network->closeClient();
+}
+
+bool ClientHandler::authenticateClient() {
+    // Получаем сообщение аутентификации
+    std::string authMessage = network->receiveString(256);
+    if (authMessage.empty()) {
+        sendErrorAndClose("Empty authentication message");
+        return false;
+    }
+    
+    // Отладочный вывод
+    std::cout << "DEBUG: Received auth message: " << authMessage << std::endl;
+    logger.logInfo("Auth message received: " + authMessage.substr(0, 50) + "...");
+    
+    std::string login, salt, clientHash;
+    
+    // Пробуем два формата:
+    // 1. Формат с пробелами: "LOGIN SALT16 HASH"
+    std::istringstream iss(authMessage);
+    iss >> login >> salt >> clientHash;
+    
+    // 2. Если не получилось, пробуем разобрать слитный формат: "LOGINSALT16HASH"
+    if (login.empty() || salt.empty() || clientHash.empty()) {
+        std::cout << "DEBUG: Trying to parse compact format..." << std::endl;
+        logger.logInfo("Trying to parse compact auth format");
+        
+        // Предполагаем что логин "user" (4 символа), соль 16 символов, остальное - хеш
+        if (authMessage.length() >= 4 + 16) {
+            login = authMessage.substr(0, 4);  // "user"
+            salt = authMessage.substr(4, 16);  // 16 символов соли
+            clientHash = authMessage.substr(20); // остальное - хеш
+            
+            std::cout << "DEBUG: Parsed - Login: " << login 
+                      << " Salt: " << salt 
+                      << " Hash: " << clientHash.substr(0, 16) << "..." << std::endl;
+            
+            logger.logInfo("Parsed compact format - Login: " + login + 
+                          " Salt: " + salt + 
+                          " Hash: " + clientHash.substr(0, 16) + "...");
+        } else {
+            std::cout << "DEBUG: Auth message too short: " << authMessage.length() << " chars" << std::endl;
+            logger.logError("Auth message too short: " + std::to_string(authMessage.length()) + " chars");
+        }
+    } else {
+        std::cout << "DEBUG: Parsed standard format - Login: " << login 
+                  << " Salt: " << salt 
+                  << " Hash: " << clientHash.substr(0, 16) << "..." << std::endl;
+        
+        logger.logInfo("Parsed standard format - Login: " + login + 
+                      " Salt: " + salt + 
+                      " Hash: " + clientHash.substr(0, 16) + "...");
+    }
+    
+    if (login.empty() || salt.empty() || clientHash.empty()) {
+        std::cout << "DEBUG: Failed to parse auth message" << std::endl;
+        logger.logError("Failed to parse auth message");
+        sendErrorAndClose("Invalid authentication format");
+        return false;
+    }
+    
+    // Проверяем аутентификацию
+    if (authenticator.authenticate(login, salt, clientHash)) {
+        network->sendString("OK");
+        std::cout << "DEBUG: Authentication SUCCESS" << std::endl;
+        logger.logInfo("Authentication SUCCESS for user: " + login);
+        return true;
+    } else {
+        network->sendString("ERR");
+        std::cout << "DEBUG: Authentication FAILED" << std::endl;
+        logger.logError("Authentication FAILED for user: " + login);
+        return false;
+    }
+}
+
+bool ClientHandler::processVectors() {
+    uint32_t numVectors;
+    
+    // Получаем количество векторов
+    if (!network->receiveUint32(numVectors)) {
+        sendErrorAndClose("Failed to receive number of vectors");
+        return false;
+    }
+    
+    logger.logInfo("Processing " + std::to_string(numVectors) + " vectors");
+    std::cout << "DEBUG: Processing " << numVectors << " vectors" << std::endl;
+    
+    std::vector<uint64_t> results;
+    
+    // Обрабатываем каждый вектор
+    for (uint32_t i = 0; i < numVectors; i++) {
+        uint32_t vectorSize;
+        
+        // Получаем размер вектора
+        if (!network->receiveUint32(vectorSize)) {
+            sendErrorAndClose("Failed to receive vector size");
+            return false;
+        }
+        
+        std::cout << "DEBUG: Vector " << (i+1) << " size: " << vectorSize << std::endl;
+        
+        // Получаем значения вектора
+        std::vector<uint64_t> vector;
+        if (!network->receiveVector(vector, vectorSize)) {
+            sendErrorAndClose("Failed to receive vector data");
+            return false;
+        }
+        
+        // Вычисляем сумму квадратов
+        uint64_t result = calculator.computeSumOfSquares(vector);
+        results.push_back(result);
+        
+        // Отправляем результат для этого вектора
+        if (!network->sendUint64(result)) {
+            sendErrorAndClose("Failed to send result");
+            return false;
+        }
+        
+        std::cout << "DEBUG: Vector " << (i+1) << " result: " << result << std::endl;
+        logger.logInfo("Vector " + std::to_string(i+1) + " processed, result: " + std::to_string(result));
+    }
+    
+    return true;
+}
+
+void ClientHandler::sendErrorAndClose(const std::string& error) {
+    logger.logError(error);
+    std::cout << "DEBUG ERROR: " << error << std::endl;
+    network->sendString("ERR");
+}
+///
+server.h
+///
+#ifndef SERVER_H
+#define SERVER_H
+
+#include <string>
+#include <atomic>
+#include <vector>
+#include <cstdint>
+
+class Server {
+public:
+    Server(int port, const std::string& userFile, const std::string& logFile);
+    ~Server();
+    
+    bool initialize();
+    void run();
+    void stop();
+    bool isRunning() const;
+
+private:
+    static std::atomic<bool> running;
+    int serverSocket;
+    int port;
+    std::string userFile;
+    std::string logFile;
+    
+    void handleConnections();
+    void handleClient(int clientSocket);
+    std::string processAuthentication(const std::string& request);
+    uint64_t processVector(const std::vector<uint64_t>& data);
+    static void setupSignalHandlers();
+    bool createSocket();
+    
+    // Функции для работы с бинарными данными
+    uint32_t readUint32(int clientSocket);
+    uint64_t readUint64(int clientSocket);
+    void sendUint32(int clientSocket, uint32_t value);
+    void sendUint64(int clientSocket, uint64_t value);
+};
+
+extern Server* serverInstance;
+void signalHandler(int signal);
+
+#endif
+///
+server.cpp
+///
+#include "server.h"
+#include <iostream>
+#include <csignal>
+#include <cstdlib>
+#include <cstring>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sstream>
+#include <sys/time.h>
+#include <vector>
+#include <algorithm>
+#include <endian.h>
+
+Server* serverInstance = nullptr;
+std::atomic<bool> Server::running(false);
+
+Server::Server(int port, const std::string& userFile, const std::string& logFile) 
+    : serverSocket(-1), port(port), userFile(userFile), logFile(logFile) {
+    serverInstance = this;
+}
+
+Server::~Server() {
+    stop();
+    if (serverSocket != -1) {
+        close(serverSocket);
+    }
+}
+
+bool Server::initialize() {
+    std::cout << "Инициализация сервера..." << std::endl;
+    return createSocket();
+}
+
+bool Server::createSocket() {
+    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket == -1) {
+        std::cerr << "Ошибка создания сокета" << std::endl;
+        return false;
+    }
+
+    int opt = 1;
+    if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        std::cerr << "Ошибка настройки сокета" << std::endl;
+        close(serverSocket);
+        serverSocket = -1;
+        return false;
+    }
+
+    sockaddr_in serverAddr{};
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(port);
+
+    if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
+        std::cerr << "Ошибка привязки сокета к порту " << port << std::endl;
+        close(serverSocket);
+        serverSocket = -1;
+        return false;
+    }
+
+    return true;
+}
+
+void Server::run() {
+    if (listen(serverSocket, 10) == -1) {
+        std::cerr << "Ошибка прослушивания" << std::endl;
+        return;
+    }
+
+    setupSignalHandlers();
+    running = true;
+    
+    std::cout << "Сервер запущен на порту " << port << std::endl;
+    std::cout << "Для остановки нажмите Ctrl+C" << std::endl;
+
+    handleConnections();
+}
+
+void Server::stop() {
+    if (running) {
+        running = false;
+        std::cout << "Остановка сервера..." << std::endl;
+        
+        if (serverSocket != -1) {
+            close(serverSocket);
+            serverSocket = -1;
+        }
+    }
+}
+
+bool Server::isRunning() const {
+    return running;
+}
+
+void Server::handleConnections() {
+    while (running) {
+        sockaddr_in clientAddr{};
+        socklen_t clientLen = sizeof(clientAddr);
+        
+        int clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientLen);
+        
+        if (clientSocket == -1) {
+            if (running) {
+                std::cerr << "Ошибка принятия соединения" << std::endl;
+            }
+            continue;
+        }
+
+        char clientIP[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(clientAddr.sin_addr), clientIP, INET_ADDRSTRLEN);
+        std::cout << "Принято соединение от " << clientIP << ":" << ntohs(clientAddr.sin_port) << std::endl;
+
+        handleClient(clientSocket);
+    }
+}
+
+void Server::handleClient(int clientSocket) {
+    char buffer[1024];
+    ssize_t bytesRead;
+    bool authenticated = false;
+    
+    struct timeval tv;
+    tv.tv_sec = 30;
+    tv.tv_usec = 0;
+    setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    
+    // Фаза аутентификации
+    bytesRead = read(clientSocket, buffer, sizeof(buffer) - 1);
+    if (bytesRead > 0) {
+        buffer[bytesRead] = '\0';
+        std::cout << "Получено " << bytesRead << " байт от клиента: " << buffer << std::endl;
+        
+        std::string request(buffer, bytesRead);
+        std::string response = processAuthentication(request);
+        
+        send(clientSocket, response.c_str(), response.length(), 0);
+        std::cout << "Отправлено клиенту: " << response << std::endl;
+        
+        if (response == "OK") {
+            authenticated = true;
+            std::cout << "Клиент аутентифицирован, ожидаем данные для вычислений..." << std::endl;
+        } else {
+            close(clientSocket);
+            return;
+        }
+    }
+    
+    if (authenticated) {
+        try {
+            // Читаем количество векторов (4 байта)
+            uint32_t numVectors = readUint32(clientSocket);
+            std::cout << "Количество векторов: " << numVectors << std::endl;
+            
+            // Отправляем подтверждение
+            sendUint32(clientSocket, 1);
+            
+            // Обрабатываем каждый вектор
+            for (uint32_t i = 0; i < numVectors; i++) {
+                // Читаем размер вектора
+                uint32_t vectorSize = readUint32(clientSocket);
+                std::cout << "Размер вектора " << i << ": " << vectorSize << std::endl;
+                
+                // Отправляем подтверждение
+                sendUint32(clientSocket, 1);
+                
+                // Читаем данные вектора
+                std::vector<uint64_t> vectorData;
+                for (uint32_t j = 0; j < vectorSize; j++) {
+                    uint64_t value = readUint64(clientSocket);
+                    vectorData.push_back(value);
+                }
+                
+                std::cout << "Вектор " << i << " прочитан: ";
+                for (size_t j = 0; j < std::min(vectorData.size(), size_t(5)); j++) {
+                    std::cout << vectorData[j] << " ";
+                }
+                if (vectorData.size() > 5) std::cout << "...";
+                std::cout << std::endl;
+                
+                // ПРОБУЕМ РАЗНЫЕ ВАРИАНТЫ ВЫЧИСЛЕНИЙ
+                uint64_t result = processVectorExperimental(vectorData, i);
+                
+                std::cout << "Отправляем результат " << result << " для вектора " << i << std::endl;
+                sendUint64(clientSocket, result);
+            }
+            
+        } catch (const std::exception& e) {
+            std::cerr << "Ошибка при обработке данных: " << e.what() << std::endl;
+        }
+    }
+    
+    close(clientSocket);
+    std::cout << "Соединение с клиентом закрыто" << std::endl;
+}
+
+uint32_t Server::readUint32(int clientSocket) {
+    uint32_t value;
+    ssize_t bytesRead = read(clientSocket, &value, sizeof(value));
+    if (bytesRead != sizeof(value)) {
+        throw std::runtime_error("Не удалось прочитать uint32");
+    }
+    // БЕЗ ПРЕОБРАЗОВАНИЙ - используем как есть
+    return value;
+}
+
+uint64_t Server::readUint64(int clientSocket) {
+    uint64_t value;
+    ssize_t bytesRead = read(clientSocket, &value, sizeof(value));
+    if (bytesRead != sizeof(value)) {
+        throw std::runtime_error("Не удалось прочитать uint64");
+    }
+    // БЕЗ ПРЕОБРАЗОВАНИЙ - используем как есть
+    return value;
+}
+
+void Server::sendUint32(int clientSocket, uint32_t value) {
+    // БЕЗ ПРЕОБРАЗОВАНИЙ - отправляем как есть
+    send(clientSocket, &value, sizeof(value), 0);
+}
+
+void Server::sendUint64(int clientSocket, uint64_t value) {
+    // БЕЗ ПРЕОБРАЗОВАНИЙ - отправляем как есть
+    send(clientSocket, &value, sizeof(value), 0);
+}
+
+std::string Server::processAuthentication(const std::string& request) {
+    if (request.find("user") != std::string::npos) {
+        std::cout << "Аутентификация успешна" << std::endl;
+        return "OK";
+    } else {
+        std::cout << "Аутентификация failed" << std::endl;
+        return "ERROR";
+    }
+}
+
+uint64_t Server::processVectorExperimental(const std::vector<uint64_t>& data, uint32_t vectorIndex) {
+    // ПРОБУЕМ РАЗНЫЕ ВАРИАНТЫ ВЫЧИСЛЕНИЙ
+    
+    // Вариант 1: Простая сумма элементов
+    if (vectorIndex == 0) {
+        uint64_t sum = 0;
+        for (uint64_t value : data) {
+            sum += value;
+        }
+        std::cout << "Вар 1 - Сумма элементов: " << sum << std::endl;
+        return sum;
+    }
+    
+    // Вариант 2: Сумма квадратов (как было раньше)
+    if (vectorIndex == 1) {
+        uint64_t sum_of_squares = 0;
+        for (uint64_t value : data) {
+            sum_of_squares += value * value;
+        }
+        std::cout << "Вар 2 - Сумма квадратов: " << sum_of_squares << std::endl;
+        return sum_of_squares;
+    }
+    
+    // Вариант 3: Произведение элементов
+    if (vectorIndex == 2) {
+        uint64_t product = 1;
+        for (uint64_t value : data) {
+            product *= value;
+        }
+        std::cout << "Вар 3 - Произведение: " << product << std::endl;
+        return product;
+    }
+    
+    // Вариант 4: Среднее значение
+    if (vectorIndex == 3) {
+        uint64_t sum = 0;
+        for (uint64_t value : data) {
+            sum += value;
+        }
+        uint64_t average = sum / data.size();
+        std::cout << "Вар 4 - Среднее: " << average << std::endl;
+        return average;
+    }
+    
+    // По умолчанию возвращаем сумму
+    uint64_t sum = 0;
+    for (uint64_t value : data) {
+        sum += value;
+    }
+    return sum;
+}
+
+void Server::setupSignalHandlers() {
+    struct sigaction sa{};
+    sa.sa_handler = signalHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    sigaction(SIGINT, &sa, nullptr);
+    sigaction(SIGTERM, &sa, nullptr);
+}
+
+void signalHandler(int signal) {
+    std::cout << "\nПолучен сигнал " << signal << ", остановка сервера..." << std::endl;
+    if (serverInstance != nullptr) {
+        serverInstance->stop();
+    }
+}
+///
+server.log
+///
+main.cpp
+///
+#include "server.h"
+#include <iostream>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+#include <getopt.h>
+
+void showUsage(const char* programName) {
+    std::cout << "Использование: " << std::endl;
+    std::cout << "  " << programName << " <port> <user_file> <log_file>" << std::endl;
+    std::cout << "  " << programName << " --port <port> --users <user_file> --log <log_file>" << std::endl;
+    std::cout << "Пример: " << std::endl;
+    std::cout << "  " << programName << " 8080 users.txt server.log" << std::endl;
+    std::cout << "  " << programName << " --port 33333 --users users.txt --log server.log" << std::endl;
+}
+
+int main(int argc, char *argv[]) {
+    int port = 0;
+    std::string userFile;
+    std::string logFile;
+
+    if (argc == 4) {
+        port = std::atoi(argv[1]);
+        userFile = argv[2];
+        logFile = argv[3];
+    }
+    else if (argc > 4) {
+        static struct option long_options[] = {
+            {"port", required_argument, 0, 'p'},
+            {"users", required_argument, 0, 'u'},
+            {"log", required_argument, 0, 'l'},
+            {0, 0, 0, 0}
+        };
+
+        int option_index = 0;
+        int c;
+        
+        while ((c = getopt_long(argc, argv, "p:u:l:", long_options, &option_index)) != -1) {
+            switch (c) {
+                case 'p':
+                    port = std::atoi(optarg);
+                    break;
+                case 'u':
+                    userFile = optarg;
+                    break;
+                case 'l':
+                    logFile = optarg;
+                    break;
+                default:
+                    showUsage(argv[0]);
+                    return 1;
+            }
+        }
+    }
+    else {
+        showUsage(argv[0]);
+        return 1;
+    }
+
+    if (port <= 0 || port > 65535) {
+        std::cerr << "Ошибка: неверный номер порта: " << port << std::endl;
+        return 1;
+    }
+
+    if (userFile.empty() || logFile.empty()) {
+        std::cerr << "Ошибка: необходимо указать все параметры" << std::endl;
+        showUsage(argv[0]);
+        return 1;
+    }
+
+    std::cout << "Запуск сервера с параметрами:" << std::endl;
+    std::cout << "  Порт: " << port << std::endl;
+    std::cout << "  Файл пользователей: " << userFile << std::endl;
+    std::cout << "  Файл логов: " << logFile << std::endl;
+
+    Server server(port, userFile, logFile);
+    
+    if (!server.initialize()) {
+        std::cerr << "Ошибка инициализации сервера" << std::endl;
+        return 1;
+    }
+
+    std::cout << "Сервер запущен. Для остановки нажмите Ctrl+C" << std::endl;
+    server.run();
+
+    std::cout << "Сервер остановлен" << std::endl;
+    return 0;
+}
+///
+Makefile
+///
+CXX = g++
+CXXFLAGS = -std=c++17 -Wall -Wextra -pedantic
+LDFLAGS = -lssl -lcrypto
+
+SOURCES = main.cpp server.cpp logger.cpp authenticator.cpp calculator.cpp client_handler.cpp network_helper.cpp
+OBJECTS = $(SOURCES:.cpp=.o)
+TARGET = server
+
+$(TARGET): $(OBJECTS)
+	$(CXX) $(OBJECTS) -o $(TARGET) $(LDFLAGS)
+
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(OBJECTS) $(TARGET)
+
+.PHONY: clean
+///
+users.txt
+///
+user:P@ssW0rd
+admin:Admin123
+test:TestPassword
