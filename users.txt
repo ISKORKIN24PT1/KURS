@@ -1,0 +1,3 @@
+user:P@ssWord
+admin:Admin123
+test:TestPassword
