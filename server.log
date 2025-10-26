@@ -1,0 +1,56 @@
+[2025-10-26 11:25:29] [INFO] Server initialized successfully on port 33333
+[2025-10-26 11:25:29] [INFO] Server started
+[2025-10-26 11:27:01] [INFO] Server stopped
+[2025-10-26 11:27:01] [INFO] Server stopped
+[2025-10-26 11:27:11] [INFO] Server initialized successfully on port 33333
+[2025-10-26 11:27:11] [INFO] Server started
+[2025-10-26 11:27:16] [INFO] Server stopped
+[2025-10-26 11:27:16] [INFO] Server stopped
+[2025-10-26 11:48:23] [INFO] Server initialized successfully on port 33333
+[2025-10-26 11:48:23] [INFO] Server started
+[2025-10-26 11:50:50] [INFO] New client connected, socket: 5
+[2025-10-26 11:50:50] [INFO] New client connected, socket: 5
+[2025-10-26 11:51:10] [ERROR] Empty authentication message
+[2025-10-26 11:51:10] [ERROR] Client authentication failed
+[2025-10-26 11:51:10] [INFO] Client connection closed
+[2025-10-26 11:51:13] [INFO] New client connected, socket: 5
+[2025-10-26 11:51:13] [INFO] New client connected, socket: 5
+[2025-10-26 11:58:53] [INFO] Server stopped
+[2025-10-26 11:58:56] [INFO] Server stopped
+[2025-10-26 11:58:57] [INFO] Server stopped
+[2025-10-26 11:58:57] [INFO] Server stopped
+[2025-10-26 11:58:57] [INFO] Server stopped
+[2025-10-26 11:58:57] [INFO] Server stopped
+[2025-10-26 11:58:58] [INFO] Server stopped
+[2025-10-26 11:58:58] [INFO] Server stopped
+[2025-10-26 11:58:58] [INFO] Server stopped
+[2025-10-26 11:58:58] [INFO] Server stopped
+[2025-10-26 11:58:59] [INFO] Server stopped
+[2025-10-26 11:58:59] [INFO] Server stopped
+[2025-10-26 11:58:59] [INFO] Server stopped
+[2025-10-26 12:00:40] [ERROR] Cannot bind socket to port 33333
+[2025-10-26 12:00:40] [INFO] Server stopped
+[2025-10-26 12:05:26] [ERROR] Cannot bind socket to port 33333
+[2025-10-26 12:05:26] [INFO] Server stopped
+[2025-10-26 12:05:56] [ERROR] Cannot bind socket to port 33333
+[2025-10-26 12:05:56] [INFO] Server stopped
+[2025-10-26 12:07:44] [ERROR] Cannot bind socket to port 33333
+[2025-10-26 12:07:44] [INFO] Server stopped
+[2025-10-26 12:15:22] [ERROR] Cannot bind socket to port 33333
+[2025-10-26 12:15:22] [INFO] Server stopped
+[2025-10-26 12:15:28] [ERROR] Cannot bind socket to port 33333
+[2025-10-26 12:15:28] [INFO] Server stopped
+[2025-10-26 12:18:35] [INFO] Server initialized successfully on port 33333
+[2025-10-26 12:18:35] [INFO] Server started
+[2025-10-26 12:19:56] [INFO] New client connected, socket: 5
+[2025-10-26 12:19:56] [INFO] New client connected, socket: 5
+[2025-10-26 12:19:56] [ERROR] Invalid authentication format
+[2025-10-26 12:19:56] [ERROR] Client authentication failed
+[2025-10-26 12:19:56] [INFO] Client connection closed
+[2025-10-26 12:21:18] [INFO] New client connected, socket: 5
+[2025-10-26 12:21:18] [INFO] New client connected, socket: 5
+[2025-10-26 12:21:18] [ERROR] Invalid authentication format
+[2025-10-26 12:21:18] [ERROR] Client authentication failed
+[2025-10-26 12:21:18] [INFO] Client connection closed
+[2025-10-26 12:23:33] [INFO] Server stopped
+[2025-10-26 12:23:33] [INFO] Server stopped

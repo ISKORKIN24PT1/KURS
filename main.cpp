@@ -1,64 +1,88 @@
 #include "server.h"
 #include <iostream>
-#include <csignal>
+#include <cstdlib>
 #include <cstring>
+#include <string>
+#include <getopt.h>
 
-// Глобальные переменные ТОЛЬКО здесь
-Server* serverInstance = nullptr;
-
-void signalHandler(int signal) {
-    if (serverInstance && signal == SIGINT) {
-        std::cout << "\nReceived SIGINT, shutting down..." << std::endl;
-        serverInstance->stop();
-    }
+void showUsage(const char* programName) {
+    std::cout << "Использование: " << std::endl;
+    std::cout << "  " << programName << " <port> <user_file> <log_file>" << std::endl;
+    std::cout << "  " << programName << " --port <port> --users <user_file> --log <log_file>" << std::endl;
+    std::cout << "Пример: " << std::endl;
+    std::cout << "  " << programName << " 8080 users.txt server.log" << std::endl;
+    std::cout << "  " << programName << " --port 33333 --users users.txt --log server.log" << std::endl;
 }
 
-int main(int argc, char* argv[]) {
-    // Обработка аргументов командной строки
-    std::string usersFile = "users.txt";
-    std::string logFile = "server.log";
-    int port = 33333;
-    
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-            std::cout << "Network Server Help:" << std::endl;
-            std::cout << "  --users <file>    Users database file (required)" << std::endl;
-            std::cout << "  --log <file>      Log file (required)" << std::endl;
-            std::cout << "  --port <number>   Port number (required)" << std::endl;
-            std::cout << "  -h, --help        Show this help" << std::endl;
-            return 0;
-        }
-        else if (strcmp(argv[i], "--users") == 0 && i + 1 < argc) {
-            usersFile = argv[++i];
-        }
-        else if (strcmp(argv[i], "--log") == 0 && i + 1 < argc) {
-            logFile = argv[++i];
-        }
-        else if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) {
-            port = std::stoi(argv[++i]);
+int main(int argc, char *argv[]) {
+    int port = 0;
+    std::string userFile;
+    std::string logFile;
+
+    if (argc == 4) {
+        port = std::atoi(argv[1]);
+        userFile = argv[2];
+        logFile = argv[3];
+    }
+    else if (argc > 4) {
+        static struct option long_options[] = {
+            {"port", required_argument, 0, 'p'},
+            {"users", required_argument, 0, 'u'},
+            {"log", required_argument, 0, 'l'},
+            {0, 0, 0, 0}
+        };
+
+        int option_index = 0;
+        int c;
+        
+        while ((c = getopt_long(argc, argv, "p:u:l:", long_options, &option_index)) != -1) {
+            switch (c) {
+                case 'p':
+                    port = std::atoi(optarg);
+                    break;
+                case 'u':
+                    userFile = optarg;
+                    break;
+                case 'l':
+                    logFile = optarg;
+                    break;
+                default:
+                    showUsage(argv[0]);
+                    return 1;
+            }
         }
     }
-    
-    // Создаем и инициализируем сервер
-    Server server(port, usersFile, logFile);
-    serverInstance = &server;
-    
-    // Устанавливаем обработчик сигналов
-    signal(SIGINT, signalHandler);
-    
-    if (!server.initialize()) {
-        std::cerr << "Failed to initialize server" << std::endl;
+    else {
+        showUsage(argv[0]);
         return 1;
     }
+
+    if (port <= 0 || port > 65535) {
+        std::cerr << "Ошибка: неверный номер порта: " << port << std::endl;
+        return 1;
+    }
+
+    if (userFile.empty() || logFile.empty()) {
+        std::cerr << "Ошибка: необходимо указать все параметры" << std::endl;
+        showUsage(argv[0]);
+        return 1;
+    }
+
+    std::cout << "Запуск сервера с параметрами:" << std::endl;
+    std::cout << "  Порт: " << port << std::endl;
+    std::cout << "  Файл пользователей: " << userFile << std::endl;
+    std::cout << "  Файл логов: " << logFile << std::endl;
+
+    Server server(port, userFile, logFile);
     
-    std::cout << "Server starting on port " << port << std::endl;
-    std::cout << "Users file: " << usersFile << std::endl;
-    std::cout << "Log file: " << logFile << std::endl;
-    std::cout << "Press Ctrl+C to stop" << std::endl;
-    
-    // Запускаем сервер
+    if (!server.initialize()) {
+        std::cerr << "Ошибка инициализации сервера" << std::endl;
+        return 1;
+    }
+
+    std::cout << "Сервер запущен. Для остановки нажмите Ctrl+C" << std::endl;
     server.run();
-    
-    std::cout << "Server stopped" << std::endl;
+
+    std::cout << "Сервер остановлен" << std::endl;
     return 0;
 }

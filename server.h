@@ -1,44 +1,43 @@
 #ifndef SERVER_H
 #define SERVER_H
 
-#include "logger.h"
-#include "authenticator.h"
-#include "calculator.h"
-#include "network_helper.h"
-#include <atomic>
-#include <thread>
 #include <string>
-
-// Предварительное объявление чтобы избежать циклических зависимостей
-class ClientHandler;
-
-// Объявляем extern для глобальных переменных
-extern class Server* serverInstance;
-void signalHandler(int signal);
+#include <atomic>
+#include <vector>
+#include <cstdint>
 
 class Server {
-private:
-    int port;
-    std::string usersFile;
-    std::string logFile;
-    std::atomic<bool> running;
-    
-    Logger logger;
-    Authenticator authenticator;
-    Calculator calculator;
-    NetworkHelper network;
-    
 public:
-    Server(int port, const std::string& usersFile, const std::string& logFile);
+    Server(int port, const std::string& userFile, const std::string& logFile);
     ~Server();
     
     bool initialize();
     void run();
     void stop();
-    void showHelp();
-    
+    bool isRunning() const;
+
 private:
-    void handleCommandLineArgs(int argc, char* argv[]);
+    static std::atomic<bool> running;
+    int serverSocket;
+    int port;
+    std::string userFile;
+    std::string logFile;
+    
+    void handleConnections();
+    void handleClient(int clientSocket);
+    std::string processAuthentication(const std::string& request);
+    uint64_t processVector(const std::vector<uint64_t>& data);
+    static void setupSignalHandlers();
+    bool createSocket();
+    
+    // Функции для работы с бинарными данными
+    uint32_t readUint32(int clientSocket);
+    uint64_t readUint64(int clientSocket);
+    void sendUint32(int clientSocket, uint32_t value);
+    void sendUint64(int clientSocket, uint64_t value);
 };
+
+extern Server* serverInstance;
+void signalHandler(int signal);
 
 #endif
