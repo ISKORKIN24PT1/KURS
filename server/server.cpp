@@ -19,12 +19,15 @@ std::atomic<bool> Server::running(false);
 
 // Конструктор сервера
 Server::Server(int port, const std::string& userFile, const std::string& logFile) 
-    : serverSocket(-1), port(port), userFile(userFile), logFile(logFile) {
-    serverInstance = this; // Сохраняем указатель на текущий экземпляр
+    : serverSocket(-1), port(port), userFile(userFile), logFile(logFile), logger(logFile) {
+    serverInstance = this;
+    logger.logInfo("Server instance created with port: " + std::to_string(port) + 
+                  ", user file: " + userFile + ", log file: " + logFile);
 }
 
-// Деструктор сервера - останавливаем сервер и закрываем сокет
+// Деструктор сервера
 Server::~Server() {
+    logger.logInfo("Server destructor called");
     stop();
     if (serverSocket != -1) {
         close(serverSocket);
@@ -33,254 +36,264 @@ Server::~Server() {
 
 // Инициализация сервера
 bool Server::initialize() {
-    std::cout << "Инициализация сервера..." << std::endl;
-    return createSocket(); // Создаем и настраиваем сокет
+    logger.logInfo("Initializing server...");
+    
+    // Проверяем доступность файла пользователей
+    std::ifstream userTest(userFile);
+    if (!userTest.is_open()) {
+        logger.logError("Cannot open users file: " + userFile);
+        return false;
+    }
+    userTest.close();
+    logger.logInfo("Users file verified: " + userFile);
+    
+    return createSocket();
 }
 
 // Создание и настройка серверного сокета
 bool Server::createSocket() {
-    // Создаем TCP сокет
+    logger.logInfo("Creating server socket...");
+    
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == -1) {
-        std::cerr << "Ошибка создания сокета" << std::endl;
+        logger.logError("Error creating socket");
         return false;
     }
+    logger.logInfo("Socket created successfully");
 
-    // Настраиваем опцию повторного использования адреса
     int opt = 1;
     if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        std::cerr << "Ошибка настройки сокета" << std::endl;
+        logger.logError("Error setting socket options");
         close(serverSocket);
         serverSocket = -1;
         return false;
     }
 
-    // Настраиваем адрес сервера
     sockaddr_in serverAddr{};
-    serverAddr.sin_family = AF_INET;           // IPv4
-    serverAddr.sin_addr.s_addr = INADDR_ANY;   // Принимаем соединения с любого интерфейса
-    serverAddr.sin_port = htons(port);         // Порт в сетевом порядке байт
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(port);
 
-    // Привязываем сокет к адресу
     if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
-        std::cerr << "Ошибка привязки сокета к порту " << port << std::endl;
+        logger.logError("Error binding socket to port " + std::to_string(port));
         close(serverSocket);
         serverSocket = -1;
         return false;
     }
 
+    logger.logInfo("Socket bound to port " + std::to_string(port));
     return true;
 }
 
 // Основной цикл работы сервера
 void Server::run() {
-    // Переводим сокет в режим прослушивания (максимум 10 соединений в очереди)
     if (listen(serverSocket, 10) == -1) {
-        std::cerr << "Ошибка прослушивания" << std::endl;
+        logger.logError("Error starting listening");
         return;
     }
 
-    setupSignalHandlers(); // Настраиваем обработчики сигналов
-    running = true;        // Устанавливаем флаг работы
+    setupSignalHandlers();
+    running = true;
+    
+    logger.logInfo("Server started successfully on port " + std::to_string(port));
+    logger.logInfo("Server is ready to accept connections");
     
     std::cout << "Сервер запущен на порту " << port << std::endl;
+    std::cout << "Логи записываются в: " << logFile << std::endl;
     std::cout << "Для остановки нажмите Ctrl+C" << std::endl;
 
-    handleConnections();   // Начинаем обработку входящих соединений
+    handleConnections();
 }
 
 // Остановка сервера
 void Server::stop() {
     if (running) {
-        running = false; // Сбрасываем флаг работы
-        std::cout << "Остановка сервера..." << std::endl;
+        logger.logInfo("Stopping server...");
+        running = false;
         
         if (serverSocket != -1) {
-            close(serverSocket); // Закрываем серверный сокет
+            close(serverSocket);
             serverSocket = -1;
+            logger.logInfo("Server socket closed");
         }
+        logger.logInfo("Server stopped successfully");
     }
-}
-
-// Проверка состояния сервера
-bool Server::isRunning() const {
-    return running;
 }
 
 // Обработка входящих соединений
 void Server::handleConnections() {
+    logger.logInfo("Starting to handle connections");
+    
     while (running) {
         sockaddr_in clientAddr{};
         socklen_t clientLen = sizeof(clientAddr);
         
-        // Принимаем новое соединение
         int clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientLen);
         
         if (clientSocket == -1) {
             if (running) {
-                std::cerr << "Ошибка принятия соединения" << std::endl;
+                logger.logError("Error accepting connection");
             }
             continue;
         }
 
-        // Получаем информацию о клиенте
         char clientIP[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &(clientAddr.sin_addr), clientIP, INET_ADDRSTRLEN);
-        std::cout << "Принято соединение от " << clientIP << ":" << ntohs(clientAddr.sin_port) << std::endl;
+        
+        std::string clientInfo = std::string(clientIP) + ":" + std::to_string(ntohs(clientAddr.sin_port));
+        logger.logInfo("Accepted connection from: " + clientInfo + ", socket: " + std::to_string(clientSocket));
 
-        // Обрабатываем клиента
         handleClient(clientSocket);
     }
+    
+    logger.logInfo("Stopped handling connections");
 }
 
 // Обработка отдельного клиента
 void Server::handleClient(int clientSocket) {
+    logger.logInfo("Handling client on socket: " + std::to_string(clientSocket));
+    
     char buffer[1024];
     ssize_t bytesRead;
     bool authenticated = false;
     
-    // Фаза аутентификации
     bytesRead = read(clientSocket, buffer, sizeof(buffer) - 1);
     if (bytesRead > 0) {
         buffer[bytesRead] = '\0';
-        std::cout << "Получено " << bytesRead << " байт от клиента: " << buffer << std::endl;
-        
         std::string request(buffer, bytesRead);
-        std::string response = processAuthentication(request); // Обрабатываем аутентификацию
+        
+        logger.logInfo("Received authentication request from socket " + std::to_string(clientSocket) + 
+                      ", length: " + std::to_string(bytesRead));
+        
+        std::string response = processAuthentication(request);
         
         send(clientSocket, response.c_str(), response.length(), 0);
-        std::cout << "Отправлено клиенту: " << response << std::endl;
+        logger.logInfo("Sent authentication response to socket " + std::to_string(clientSocket) + 
+                      ": " + response);
         
         if (response == "OK") {
             authenticated = true;
-            std::cout << "Клиент аутентифицирован, ожидаем данные для вычислений..." << std::endl;
+            logger.logInfo("Client authenticated successfully, socket: " + std::to_string(clientSocket));
         } else {
+            logger.logError("Client authentication failed, socket: " + std::to_string(clientSocket));
             close(clientSocket);
             return;
         }
+    } else {
+        logger.logError("Empty authentication message from socket: " + std::to_string(clientSocket));
+        close(clientSocket);
+        return;
     }
     
-    // Если аутентификация успешна, обрабатываем данные для вычислений
     if (authenticated) {
         try {
-            // Читаем количество векторов (4 байта)
             uint32_t numVectors = readUint32(clientSocket);
-            std::cout << "Количество векторов: " << numVectors << std::endl;
+            logger.logInfo("Processing " + std::to_string(numVectors) + " vectors from socket: " + 
+                          std::to_string(clientSocket));
             
-            // Обрабатываем каждый вектор
             for (uint32_t i = 0; i < numVectors; i++) {
-                // Читаем размер вектора
                 uint32_t vectorSize = readUint32(clientSocket);
-                std::cout << "Размер вектора " << i << ": " << vectorSize << std::endl;
+                logger.logInfo("Vector " + std::to_string(i) + " size: " + std::to_string(vectorSize) + 
+                              ", socket: " + std::to_string(clientSocket));
                 
-                // Читаем данные вектора
                 std::vector<uint64_t> vectorData;
                 for (uint32_t j = 0; j < vectorSize; j++) {
                     uint64_t value = readUint64(clientSocket);
                     vectorData.push_back(value);
                 }
                 
-                // Логируем первые 5 элементов вектора для отладки
-                std::cout << "Вектор " << i << " прочитан: ";
-                for (size_t j = 0; j < std::min(vectorData.size(), size_t(5)); j++) {
-                    std::cout << vectorData[j] << " ";
-                }
-                if (vectorData.size() > 5) std::cout << "...";
-                std::cout << std::endl;
-                
-                // Вычисляем сумму квадратов элементов вектора
                 uint64_t result = processVector(vectorData);
                 
-                std::cout << "Отправляем результат " << result << " для вектора " << i << std::endl;
+                logger.logInfo("Vector " + std::to_string(i) + " processed, result: " + 
+                              std::to_string(result) + ", socket: " + std::to_string(clientSocket));
                 
-                // Отправляем результат клиенту
                 sendUint64(clientSocket, result);
             }
             
+            logger.logInfo("All vectors processed for socket: " + std::to_string(clientSocket));
+            
         } catch (const std::exception& e) {
-            std::cerr << "Ошибка при обработке данных: " << e.what() << std::endl;
+            logger.logError("Error processing data from socket " + std::to_string(clientSocket) + 
+                           ": " + e.what());
         }
     }
     
     close(clientSocket);
-    std::cout << "Соединение с клиентом закрыто" << std::endl;
+    logger.logInfo("Client connection closed, socket: " + std::to_string(clientSocket));
 }
 
-// Чтение 32-битного беззнакового целого из сокета
+// Обработка аутентификации клиента
+std::string Server::processAuthentication(const std::string& request) {
+    logger.logInfo("Processing authentication request");
+    
+    if (request.find("user") != std::string::npos) {
+        logger.logInfo("Authentication successful");
+        return "OK";
+    } else {
+        logger.logError("Authentication failed - invalid request format");
+        return "ERROR";
+    }
+}
+
+// Обработка вектора данных
+uint64_t Server::processVector(const std::vector<uint64_t>& data) {
+    logger.logInfo("Processing vector with " + std::to_string(data.size()) + " elements");
+    
+    uint64_t sum_of_squares = 0;
+    for (uint64_t value : data) {
+        sum_of_squares += value * value;
+    }
+    
+    logger.logInfo("Vector processing completed, sum of squares: " + std::to_string(sum_of_squares));
+    
+    return sum_of_squares;
+}
+
+// Настройка обработчиков сигналов - ИСПРАВЛЕННЫЙ (без logger)
+void Server::setupSignalHandlers() {
+    struct sigaction sa{};
+    sa.sa_handler = signalHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    sigaction(SIGINT, &sa, nullptr);
+    sigaction(SIGTERM, &sa, nullptr);
+    
+    // Убираем вызов logger из статического метода
+    // Вместо этого логируем в run() после вызова setupSignalHandlers()
+}
+
+// Обработчик сигналов
+void signalHandler(int signal) {
+    std::cout << "\nПолучен сигнал " << signal << ", остановка сервера..." << std::endl;
+    if (serverInstance != nullptr) {
+        serverInstance->stop();
+    }
+}
+
+// Методы для работы с бинарными данными (оставляем как были)
 uint32_t Server::readUint32(int clientSocket) {
     uint32_t value;
     ssize_t bytesRead = recv(clientSocket, &value, sizeof(value), MSG_WAITALL);
     if (bytesRead != sizeof(value)) {
         throw std::runtime_error("Не удалось прочитать uint32");
     }
-    // БЕЗ ПРЕОБРАЗОВАНИЙ - используем как есть (данные уже в нужном формате)
     return value;
 }
 
-// Чтение 64-битного беззнакового целого из сокета
 uint64_t Server::readUint64(int clientSocket) {
     uint64_t value;
     ssize_t bytesRead = recv(clientSocket, &value, sizeof(value), MSG_WAITALL);
     if (bytesRead != sizeof(value)) {
         throw std::runtime_error("Не удалось прочитать uint64");
     }
-    // БЕЗ ПРЕОБРАЗОВАНИЙ - используем как есть (данные уже в нужном формате)
     return value;
 }
 
-// Отправка 32-битного беззнакового целого в сокет
 void Server::sendUint32(int clientSocket, uint32_t value) {
-    // БЕЗ ПРЕОБРАЗОВАНИЙ - отправляем как есть
     send(clientSocket, &value, sizeof(value), 0);
 }
 
-// Отправка 64-битного беззнакового целого в сокет
 void Server::sendUint64(int clientSocket, uint64_t value) {
-    // БЕЗ ПРЕОБРАЗОВАНИЙ - отправляем как есть
     send(clientSocket, &value, sizeof(value), 0);
-}
-
-// Обработка аутентификации клиента
-std::string Server::processAuthentication(const std::string& request) {
-    // Упрощенная аутентификация - проверяем наличие строки "user" в запросе
-    if (request.find("user") != std::string::npos) {
-        std::cout << "Аутентификация успешна" << std::endl;
-        return "OK";
-    } else {
-        std::cout << "Аутентификация failed" << std::endl;
-        return "ERROR";
-    }
-}
-
-// Обработка вектора данных - вычисление суммы квадратов
-uint64_t Server::processVector(const std::vector<uint64_t>& data) {
-    // Вычисляем сумму квадратов элементов
-    uint64_t sum_of_squares = 0;
-    for (uint64_t value : data) {
-        sum_of_squares += value * value;
-    }
-    
-    std::cout << "Обработка вектора: сумма квадратов=" << sum_of_squares << ", элементов=" << data.size() << std::endl;
-    
-    return sum_of_squares;
-}
-
-// Настройка обработчиков сигналов для graceful shutdown
-void Server::setupSignalHandlers() {
-    struct sigaction sa{};
-    sa.sa_handler = signalHandler;  // Устанавливаем обработчик
-    sigemptyset(&sa.sa_mask);       // Очищаем маску сигналов
-    sa.sa_flags = 0;                // Без специальных флагов
-
-    // Устанавливаем обработчики для SIGINT (Ctrl+C) и SIGTERM
-    sigaction(SIGINT, &sa, nullptr);
-    sigaction(SIGTERM, &sa, nullptr);
-}
-
-// Обработчик сигналов для graceful shutdown
-void signalHandler(int signal) {
-    std::cout << "\nПолучен сигнал " << signal << ", остановка сервера..." << std::endl;
-    if (serverInstance != nullptr) {
-        serverInstance->stop(); // Останавливаем сервер через экземпляр
-    }
 }

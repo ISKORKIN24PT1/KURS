@@ -1,9 +1,12 @@
 #include "authenticator.h"
 #include <fstream>
 #include <sstream>
-#include <openssl/sha.h>
+#include <cryptopp/hex.h>
+#include <cryptopp/sha.h>  // Используем Crypto++ вместо OpenSSL
 #include <iomanip>
 #include <iostream>
+
+using namespace CryptoPP;
 
 bool Authenticator::loadUsersFromFile(const std::string& filename) {
     std::ifstream file(filename);
@@ -33,18 +36,18 @@ bool Authenticator::loadUsersFromFile(const std::string& filename) {
 std::string Authenticator::computeHash(const std::string& salt, const std::string& password) {
     std::string data = salt + password;
     
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256_CTX sha256;
-    SHA256_Init(&sha256);
-    SHA256_Update(&sha256, data.c_str(), data.size());
-    SHA256_Final(hash, &sha256);
+    SHA256 sha256;
+    std::string hash;
     
-    std::stringstream ss;
-    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
-        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
-    }
+    StringSource(data, true,
+        new HashFilter(sha256,
+            new HexEncoder(
+                new StringSink(hash)
+            )
+        )
+    );
     
-    return ss.str();
+    return hash;
 }
 
 bool Authenticator::authenticate(const std::string& login, const std::string& salt, 

@@ -5,6 +5,7 @@
 #include <atomic>
 #include <vector>
 #include <cstdint>
+#include "logger.h"  // Добавляем заголовок Logger
 
 class Server {
 public:
@@ -22,6 +23,7 @@ private:
     int port;
     std::string userFile;
     std::string logFile;
+    Logger logger;  // Добавляем объект Logger
     
     void handleConnections();
     void handleClient(int clientSocket);
