@@ -1,4 +1,5 @@
 #include "server.h"
+#include "authenticator.h"
 #include <iostream>
 #include <csignal>
 #include <cstdlib>
@@ -46,6 +47,13 @@ bool Server::initialize() {
     }
     userTest.close();
     logger.logInfo("Users file verified: " + userFile);
+    
+    // Загружаем пользователей и проверяем что загружены
+    Authenticator auth;
+    if (!auth.loadUsersFromFile(userFile)) {
+        logger.logError("Failed to load valid users from file: " + userFile);
+        return false;
+    }
     
     return createSocket();
 }
