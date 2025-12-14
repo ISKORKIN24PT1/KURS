@@ -27,6 +27,7 @@ namespace TestLoggerHelpers {
     }
 }
 
+// 3.1: Создание логгера
 TEST(Logger_Creation) {
     TestLoggerHelpers::cleanupTestFiles();
     
@@ -38,6 +39,7 @@ TEST(Logger_Creation) {
     TestLoggerHelpers::cleanupTestFiles();
 }
 
+// 3.2: Логирование информационного сообщения
 TEST(Logger_LogInfo) {
     TestLoggerHelpers::cleanupTestFiles();
     
@@ -55,6 +57,7 @@ TEST(Logger_LogInfo) {
     TestLoggerHelpers::cleanupTestFiles();
 }
 
+// 3.3: Логирование сообщения об ошибке
 TEST(Logger_LogError) {
     TestLoggerHelpers::cleanupTestFiles();
     

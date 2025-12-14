@@ -1,5 +1,14 @@
+/**
+ * @file server.cpp
+ * @author Искоркин Андрей Дмитриевич
+ * @date 08.12.2025
+ * @brief Реализация класса Server для управления серверным приложением.
+ */
+
 #include "server.h"
 #include "authenticator.h"
+#include "client_handler.h"
+#include "calculator.h"
 #include <iostream>
 #include <csignal>
 #include <cstdlib>
@@ -12,13 +21,19 @@
 #include <sys/time.h>
 #include <vector>
 #include <algorithm>
+#include <fstream>
 
 // Глобальный указатель на экземпляр сервера для обработки сигналов
 Server* serverInstance = nullptr;
 // Атомарный флаг состояния работы сервера
 std::atomic<bool> Server::running(false);
 
-// Конструктор сервера
+/**
+ * @brief Конструктор класса Server.
+ * @param[in] port Номер порта для работы сервера.
+ * @param[in] userFile Путь к файлу с базой пользователей.
+ * @param[in] logFile Путь к файлу журнала работы.
+ */
 Server::Server(int port, const std::string& userFile, const std::string& logFile) 
     : serverSocket(-1), port(port), userFile(userFile), logFile(logFile), logger(logFile) {
     serverInstance = this;
@@ -26,7 +41,9 @@ Server::Server(int port, const std::string& userFile, const std::string& logFile
                   ", user file: " + userFile + ", log file: " + logFile);
 }
 
-// Деструктор сервера
+/**
+ * @brief Деструктор класса Server.
+ */
 Server::~Server() {
     logger.logInfo("Server destructor called");
     stop();
@@ -35,7 +52,10 @@ Server::~Server() {
     }
 }
 
-// Инициализация сервера
+/**
+ * @brief Инициализирует сервер.
+ * @return true, если инициализация успешна, false в случае ошибки.
+ */
 bool Server::initialize() {
     logger.logInfo("Initializing server...");
     
@@ -43,6 +63,7 @@ bool Server::initialize() {
     std::ifstream userTest(userFile);
     if (!userTest.is_open()) {
         logger.logError("Cannot open users file: " + userFile);
+        std::cerr << "ERROR: Cannot open users file: " << userFile << std::endl;
         return false;
     }
     userTest.close();
@@ -52,19 +73,25 @@ bool Server::initialize() {
     Authenticator auth;
     if (!auth.loadUsersFromFile(userFile)) {
         logger.logError("Failed to load valid users from file: " + userFile);
+        std::cerr << "ERROR: Failed to load valid users from file: " + userFile << std::endl;
+        std::cerr << "File format must be: login password (separated by space or tab)" << std::endl;
         return false;
     }
     
     return createSocket();
 }
 
-// Создание и настройка серверного сокета
+/**
+ * @brief Создает серверный сокет.
+ * @return true, если сокет успешно создан, false в случае ошибки.
+ */
 bool Server::createSocket() {
     logger.logInfo("Creating server socket...");
     
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == -1) {
         logger.logError("Error creating socket");
+        std::cerr << "ERROR: Error creating socket" << std::endl;
         return false;
     }
     logger.logInfo("Socket created successfully");
@@ -72,6 +99,7 @@ bool Server::createSocket() {
     int opt = 1;
     if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         logger.logError("Error setting socket options");
+        std::cerr << "ERROR: Error setting socket options" << std::endl;
         close(serverSocket);
         serverSocket = -1;
         return false;
@@ -84,6 +112,7 @@ bool Server::createSocket() {
 
     if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
         logger.logError("Error binding socket to port " + std::to_string(port));
+        std::cerr << "ERROR: Error binding socket to port " << port << std::endl;
         close(serverSocket);
         serverSocket = -1;
         return false;
@@ -93,10 +122,13 @@ bool Server::createSocket() {
     return true;
 }
 
-// Основной цикл работы сервера
+/**
+ * @brief Запускает сервер и начинает обработку подключений.
+ */
 void Server::run() {
     if (listen(serverSocket, 10) == -1) {
         logger.logError("Error starting listening");
+        std::cerr << "ERROR: Error starting listening" << std::endl;
         return;
     }
 
@@ -113,7 +145,9 @@ void Server::run() {
     handleConnections();
 }
 
-// Остановка сервера
+/**
+ * @brief Останавливает сервер.
+ */
 void Server::stop() {
     if (running) {
         logger.logInfo("Stopping server...");
@@ -128,7 +162,9 @@ void Server::stop() {
     }
 }
 
-// Обработка входящих соединений
+/**
+ * @brief Обрабатывает входящие подключения.
+ */
 void Server::handleConnections() {
     logger.logInfo("Starting to handle connections");
     
@@ -157,107 +193,33 @@ void Server::handleConnections() {
     logger.logInfo("Stopped handling connections");
 }
 
-// Обработка отдельного клиента
+/**
+ * @brief Обрабатывает отдельного клиента.
+ * @param[in] clientSocket Дескриптор клиентского сокета.
+ */
 void Server::handleClient(int clientSocket) {
     logger.logInfo("Handling client on socket: " + std::to_string(clientSocket));
     
-    char buffer[1024];
-    ssize_t bytesRead;
-    bool authenticated = false;
-    
-    bytesRead = read(clientSocket, buffer, sizeof(buffer) - 1);
-    if (bytesRead > 0) {
-        buffer[bytesRead] = '\0';
-        std::string request(buffer, bytesRead);
-        
-        logger.logInfo("Received authentication request from socket " + std::to_string(clientSocket) + 
-                      ", length: " + std::to_string(bytesRead));
-        
-        std::string response = processAuthentication(request);
-        
-        send(clientSocket, response.c_str(), response.length(), 0);
-        logger.logInfo("Sent authentication response to socket " + std::to_string(clientSocket) + 
-                      ": " + response);
-        
-        if (response == "OK") {
-            authenticated = true;
-            logger.logInfo("Client authenticated successfully, socket: " + std::to_string(clientSocket));
-        } else {
-            logger.logError("Client authentication failed, socket: " + std::to_string(clientSocket));
-            close(clientSocket);
-            return;
-        }
-    } else {
-        logger.logError("Empty authentication message from socket: " + std::to_string(clientSocket));
+    // Создаём необходимые объекты для обработки клиента
+    Authenticator auth;
+    if (!auth.loadUsersFromFile(userFile)) {
+        logger.logError("Failed to load users for client, socket: " + std::to_string(clientSocket));
         close(clientSocket);
         return;
     }
     
-    if (authenticated) {
-        try {
-            uint32_t numVectors = readUint32(clientSocket);
-            logger.logInfo("Processing " + std::to_string(numVectors) + " vectors from socket: " + 
-                          std::to_string(clientSocket));
-            
-            for (uint32_t i = 0; i < numVectors; i++) {
-                uint32_t vectorSize = readUint32(clientSocket);
-                logger.logInfo("Vector " + std::to_string(i) + " size: " + std::to_string(vectorSize) + 
-                              ", socket: " + std::to_string(clientSocket));
-                
-                std::vector<uint64_t> vectorData;
-                for (uint32_t j = 0; j < vectorSize; j++) {
-                    uint64_t value = readUint64(clientSocket);
-                    vectorData.push_back(value);
-                }
-                
-                uint64_t result = processVector(vectorData);
-                
-                logger.logInfo("Vector " + std::to_string(i) + " processed, result: " + 
-                              std::to_string(result) + ", socket: " + std::to_string(clientSocket));
-                
-                sendUint64(clientSocket, result);
-            }
-            
-            logger.logInfo("All vectors processed for socket: " + std::to_string(clientSocket));
-            
-        } catch (const std::exception& e) {
-            logger.logError("Error processing data from socket " + std::to_string(clientSocket) + 
-                           ": " + e.what());
-        }
-    }
+    Calculator calc;
+    ClientHandler handler(clientSocket, auth, calc, logger);
+    handler.handleClient();
     
+    // ClientHandler сам закрывает сокет, но на всякий случай
     close(clientSocket);
     logger.logInfo("Client connection closed, socket: " + std::to_string(clientSocket));
 }
 
-// Обработка аутентификации клиента
-std::string Server::processAuthentication(const std::string& request) {
-    logger.logInfo("Processing authentication request");
-    
-    if (request.find("user") != std::string::npos) {
-        logger.logInfo("Authentication successful");
-        return "OK";
-    } else {
-        logger.logError("Authentication failed - invalid request format");
-        return "ERROR";
-    }
-}
-
-// Обработка вектора данных
-uint64_t Server::processVector(const std::vector<uint64_t>& data) {
-    logger.logInfo("Processing vector with " + std::to_string(data.size()) + " elements");
-    
-    uint64_t sum_of_squares = 0;
-    for (uint64_t value : data) {
-        sum_of_squares += value * value;
-    }
-    
-    logger.logInfo("Vector processing completed, sum of squares: " + std::to_string(sum_of_squares));
-    
-    return sum_of_squares;
-}
-
-// Настройка обработчиков сигналов - ИСПРАВЛЕННЫЙ (без logger)
+/**
+ * @brief Устанавливает обработчики сигналов.
+ */
 void Server::setupSignalHandlers() {
     struct sigaction sa{};
     sa.sa_handler = signalHandler;
@@ -266,12 +228,12 @@ void Server::setupSignalHandlers() {
 
     sigaction(SIGINT, &sa, nullptr);
     sigaction(SIGTERM, &sa, nullptr);
-    
-    // Убираем вызов logger из статического метода
-    // Вместо этого логируем в run() после вызова setupSignalHandlers()
 }
 
-// Обработчик сигналов
+/**
+ * @brief Обработчик сигналов.
+ * @param[in] signal Номер полученного сигнала.
+ */
 void signalHandler(int signal) {
     std::cout << "\nПолучен сигнал " << signal << ", остановка сервера..." << std::endl;
     if (serverInstance != nullptr) {
@@ -279,29 +241,10 @@ void signalHandler(int signal) {
     }
 }
 
-// Методы для работы с бинарными данными (оставляем как были)
-uint32_t Server::readUint32(int clientSocket) {
-    uint32_t value;
-    ssize_t bytesRead = recv(clientSocket, &value, sizeof(value), MSG_WAITALL);
-    if (bytesRead != sizeof(value)) {
-        throw std::runtime_error("Не удалось прочитать uint32");
-    }
-    return value;
-}
-
-uint64_t Server::readUint64(int clientSocket) {
-    uint64_t value;
-    ssize_t bytesRead = recv(clientSocket, &value, sizeof(value), MSG_WAITALL);
-    if (bytesRead != sizeof(value)) {
-        throw std::runtime_error("Не удалось прочитать uint64");
-    }
-    return value;
-}
-
-void Server::sendUint32(int clientSocket, uint32_t value) {
-    send(clientSocket, &value, sizeof(value), 0);
-}
-
-void Server::sendUint64(int clientSocket, uint64_t value) {
-    send(clientSocket, &value, sizeof(value), 0);
+/**
+ * @brief Проверяет состояние работы сервера.
+ * @return true, если сервер работает, false если остановлен.
+ */
+bool Server::isRunning() const {
+    return running;
 }

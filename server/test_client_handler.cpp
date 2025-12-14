@@ -15,7 +15,7 @@ namespace TestClientHandlerHelpers {
 
     void createTestUsersFile() {
         ofstream file(TEST_USERS_FILE);
-        file << "testuser:TestPassword123\n";
+        file << "testuser TestPassword123\n";
         file.close();
     }
 
@@ -25,13 +25,15 @@ namespace TestClientHandlerHelpers {
     }
 }
 
+// 4.1: Парсинг сообщения аутентификации
 TEST(ClientHandler_AuthenticationMessageParsing) {
     TestClientHandlerHelpers::createTestUsersFile();
     
     Authenticator auth;
     Logger logger(TestClientHandlerHelpers::TEST_LOG_FILE);
     
-    auth.loadUsersFromFile(TestClientHandlerHelpers::TEST_USERS_FILE);
+    bool loaded = auth.loadUsersFromFile(TestClientHandlerHelpers::TEST_USERS_FILE);
+    CHECK(loaded);
     
     string login = "testuser";
     string salt = "4F9C429F5C6884DB";
@@ -44,6 +46,7 @@ TEST(ClientHandler_AuthenticationMessageParsing) {
     TestClientHandlerHelpers::cleanupTestFiles();
 }
 
+// 4.2: Обработка вектора
 TEST(ClientHandler_VectorProcessing) {
     Calculator calc;
     
@@ -51,4 +54,14 @@ TEST(ClientHandler_VectorProcessing) {
     uint64_t result = calc.computeSumOfSquares(testVector);
     
     CHECK_EQUAL(55, result);
+}
+
+// 4.3: Обработка пустого вектора
+TEST(ClientHandler_EmptyVectorProcessing) {
+    Calculator calc;
+    
+    vector<uint64_t> testVector;
+    uint64_t result = calc.computeSumOfSquares(testVector);
+    
+    CHECK_EQUAL(0, result);
 }

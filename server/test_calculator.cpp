@@ -6,6 +6,7 @@
 
 using namespace std;
 
+// 2.1: Вычисление суммы квадратов для нормального случая
 TEST(Calculator_ComputeSumOfSquares_NormalCase) {
     Calculator calc;
     
@@ -15,6 +16,7 @@ TEST(Calculator_ComputeSumOfSquares_NormalCase) {
     CHECK_EQUAL(55, result);
 }
 
+// 2.2: Вычисление суммы квадратов для пустого вектора
 TEST(Calculator_ComputeSumOfSquares_EmptyVector) {
     Calculator calc;
     
@@ -24,6 +26,7 @@ TEST(Calculator_ComputeSumOfSquares_EmptyVector) {
     CHECK_EQUAL(0, result);
 }
 
+// 2.3: Вычисление суммы квадратов для одного элемента
 TEST(Calculator_ComputeSumOfSquares_SingleElement) {
     Calculator calc;
     
@@ -33,6 +36,7 @@ TEST(Calculator_ComputeSumOfSquares_SingleElement) {
     CHECK_EQUAL(100, result);
 }
 
+// 2.4: Вычисление суммы квадратов для нулевых значений
 TEST(Calculator_ComputeSumOfSquares_ZeroValues) {
     Calculator calc;
     
@@ -42,6 +46,7 @@ TEST(Calculator_ComputeSumOfSquares_ZeroValues) {
     CHECK_EQUAL(0, result);
 }
 
+// 2.5: Переполнение при умножении
 TEST(Calculator_ComputeSumOfSquares_OverflowMultiplication) {
     Calculator calc;
     
@@ -52,6 +57,7 @@ TEST(Calculator_ComputeSumOfSquares_OverflowMultiplication) {
     CHECK_EQUAL(1, result);
 }
 
+// 2.6: Переполнение при сложении
 TEST(Calculator_ComputeSumOfSquares_OverflowAddition) {
     Calculator calc;
     
@@ -65,6 +71,7 @@ TEST(Calculator_ComputeSumOfSquares_OverflowAddition) {
     CHECK_EQUAL(1, result);
 }
 
+// 2.7: Вычисление суммы квадратов для больших чисел
 TEST(Calculator_ComputeSumOfSquares_LargeNumbers) {
     Calculator calc;
     
@@ -75,6 +82,7 @@ TEST(Calculator_ComputeSumOfSquares_LargeNumbers) {
     CHECK_EQUAL(expected, result);
 }
 
+// 2.8: Граничный случай
 TEST(Calculator_ComputeSumOfSquares_BoundaryCase) {
     Calculator calc;
     
