@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -pthread -D_GNU_SOURCE
+CXXFLAGS = -std=c++17 -Wall -Wextra -D_GNU_SOURCE
 LIBS = -lUnitTest++ -lcrypto++
 
 # Основные цели
